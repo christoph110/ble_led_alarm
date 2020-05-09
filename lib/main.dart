@@ -1,7 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'dart:async';
-// import 'color_picker.dart';
+import 'color_picker.dart';
 // import 'BLEconnect.dart';
 import 'BLEconnectEmulator.dart';  // use this package instead when debugging with emulated device where BLE functionality is not available
 
@@ -400,55 +400,55 @@ void setAlarmList(List<int> returnValue) {
 
   Widget directLight(BuildContext context) {
     return Scaffold(
-      // body:  Align(
-      //   alignment: Alignment.topCenter,
-      //   child: Column(
-      //     crossAxisAlignment: CrossAxisAlignment.center,
-      //     children: <Widget>[
-      //       SizedBox(height: 20),
-      //       CircleColorPicker(
-      //         thumbRadius: 10,
-      //         colorListener: (int value) {
-      //           setState(() {
-      //             currentColor = Color(value);
-      //           });
-      //         },
-      //       ),
-      //       SizedBox(height: 20),
-      //       BarColorPicker(
-      //         width: 300,
-      //         thumbColor: Colors.white,
-      //         cornerRadius: 10,
-      //         pickMode: PickMode.Color,
-      //         colorListener: (int value) {
-      //           setState(() {
-      //             currentColor = Color(value);
-      //           });
-      //         }),
-      //       SizedBox(height: 20),
-      //       BarColorPicker(
-      //         cornerRadius: 10,
-      //         pickMode: PickMode.Grey,
-      //         colorListener: (int value) {
-      //           setState(() {
-      //             currentColor = Color(value);
-      //           });
-      //         }),
-      //       SizedBox(height: 20),
-      //       Container(
-      //         width: 150,
-      //         height: 50,
-      //         color: currentColor,
-      //         alignment: Alignment.center,
-      //         child: Text(currentColor.value.toRadixString(16).toUpperCase()),
-      //       ),
-      //     ],
-      //   ),
-      // ),
-      body:  FlatButton(
-        child: new Text("Get time of BLE device"),
-        onPressed: () => bleConnect.sendData(context, [9], (returnValue) => showAlert(context, returnValue.toString())),
+      body:  Align(
+        alignment: Alignment.topCenter,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: <Widget>[
+            SizedBox(height: 20),
+            CircleColorPicker(
+              thumbRadius: 10,
+              colorListener: (int value) {
+                setState(() {
+                  currentColor = Color(value);
+                });
+              },
+            ),
+            SizedBox(height: 20),
+            BarColorPicker(
+              width: 300,
+              thumbColor: Colors.white,
+              cornerRadius: 10,
+              pickMode: PickMode.Color,
+              colorListener: (int value) {
+                setState(() {
+                  currentColor = Color(value);
+                });
+              }),
+            SizedBox(height: 20),
+            BarColorPicker(
+              cornerRadius: 10,
+              pickMode: PickMode.Grey,
+              colorListener: (int value) {
+                setState(() {
+                  currentColor = Color(value);
+                });
+              }),
+            SizedBox(height: 20),
+            Container(
+              width: 150,
+              height: 50,
+              color: currentColor,
+              alignment: Alignment.center,
+              child: Text(currentColor.value.toRadixString(16).toUpperCase()),
+            ),
+          ],
+        ),
       ),
+      // body:  FlatButton(
+      //   child: new Text("Get time of BLE device"),
+      //   onPressed: () => bleConnect.sendData(context, [9], (returnValue) => showAlert(context, returnValue.toString())),
+      // ),
     );
   }
 
