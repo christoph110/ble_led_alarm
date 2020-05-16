@@ -399,21 +399,22 @@ class _MyHomePageState extends State<MyHomePage> {
                   SizedBox(
                     width: 70,
                     child: FlatButton(
-                      child: bleConnect.bleDeviceState(context),
-                      onPressed: () async {
-                        bleConnect.connectBLEdevice(
-                          context, 
-                          returnHandler: (returnValue) => returnHandler(returnValue) 
-                        )
-                        .then((isConnected) {
-                          if (isConnected) {
-                            syncDateTimeWithBLEdevice();
-                            getCurrentColor();
-                            getAlarmList();
-                          }
-                        });
-                          
-                      },
+                      child: Text("Disconnect"),
+                      onPressed: () => BLEconnect.disconnectBLEdevice(context),
+                      // child: bleConnect.bleDeviceState(context),
+                      // onPressed: () async {
+                      //   bleConnect.connectBLEdevice(
+                      //     context, 
+                      //     returnHandler: (returnValue) => returnHandler(returnValue) 
+                      //   )
+                      //   .then((isConnected) {
+                      //     if (isConnected) {
+                      //       syncDateTimeWithBLEdevice();
+                      //       getCurrentColor();
+                      //       getAlarmList();
+                      //     }
+                      //   });
+                      // },
                     )
                   )
                 ],
@@ -495,7 +496,16 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return bleConnect.withBLEon(context, () => tabView(context));
+    return bleConnect.withBLEconnected(
+      context,
+      onConnect: () {
+        syncDateTimeWithBLEdevice();
+        getCurrentColor();
+        getAlarmList();
+      },
+      whileConnected: () => tabView(context),
+      returnHandler: (returnValue) => returnHandler(returnValue) 
+      );
   }
 }
 

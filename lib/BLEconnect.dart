@@ -17,14 +17,30 @@ class BLEconnect {
   static StreamSubscription readSubscription;
 
   
-  Widget withBLEon(BuildContext context, Function func) {
+  Widget withBLEconnected(BuildContext context, {Function onConnect, Function whileConnected, Function returnHandler}) {
     return StreamBuilder<BluetoothState>(
       stream: FlutterBlue.instance.state,
       initialData: BluetoothState.unknown,
       builder: (c, snapshot) {
         final state = snapshot.data;
         if (state == BluetoothState.on) {
-          return func();
+          // return whileConnected();
+          return StreamBuilder<List<BluetoothDevice>>(
+            stream: Stream.periodic(Duration(milliseconds: 500))
+                      .asyncMap((_) => FlutterBlue.instance.connectedDevices),
+            initialData: [],
+            builder: (c, snapshot) {
+              final state = snapshot.data;
+              if (state.contains(targetDevice)) {
+                return whileConnected();
+              }
+              return connectBLEdevice(
+                      context, 
+                      onConnect: onConnect(),
+                      returnHandler: (returnValue) => returnHandler(returnValue) 
+              );
+            }
+          );
         }
         return BluetoothOffScreen(state: state);
       }
@@ -32,48 +48,72 @@ class BLEconnect {
   }
 
 
-  Widget bleDeviceState(BuildContext context) {
-    return StreamBuilder<List<BluetoothDevice>>(
-      stream: Stream.periodic(Duration(seconds: 1))
-          .asyncMap((_) => FlutterBlue.instance.connectedDevices),
-      initialData: [],
-      builder: (c, snapshot) {
-        if (snapshot.data.contains(targetDevice)) {
-          return Icon(Icons.bluetooth_connected);
-        }
-        return Icon(Icons.bluetooth_disabled, color: Colors.red);
-      } 
-    );
-  }
+  // Widget bleDeviceState(BuildContext context) {
+  //   return StreamBuilder<List<BluetoothDevice>>(
+  //     stream: Stream.periodic(Duration(seconds: 1))
+  //         .asyncMap((_) => FlutterBlue.instance.connectedDevices),
+  //     initialData: [],
+  //     builder: (c, snapshot) {
+  //       if (snapshot.data.contains(targetDevice)) {
+  //         return Icon(Icons.bluetooth_connected);
+  //       }
+  //       return Icon(Icons.bluetooth_disabled, color: Colors.red);
+  //     } 
+  //   );
+  // }
 
 
-  Widget getBLEdevices() {
+  // bool isConnected(BuildContext context) {
+  //   bool isConnected;
+  //   Stream.periodic(Duration(seconds: 1))
+  //         .asyncMap((_) => FlutterBlue.instance.connectedDevices)
+  //         .listen((devices) => isConnected = devices.contains(targetDevice));
+  //   return isConnected;
+  // }
+
+
+  // Widget getBLEdevices() {
+  //   FlutterBlue.instance.startScan();
+  //   return FindDevicesScreen();
+  // }
+
+
+  Widget connectBLEdevice(BuildContext context, {Function onConnect, Function returnHandler}) {
+    // FlutterBlue.instance.stopScan();
     FlutterBlue.instance.startScan();
-    return FindDevicesScreen();
+    return FindDevicesScreen(
+            onConnect: onConnect,
+            returnHandler: returnHandler
+    );
+    // targetDevice = await Navigator.of(context).push(
+    //                         MaterialPageRoute(
+    //                           builder: (context) => getBLEdevices()
+    //                         )
+    //                       );
+    // return getCharacteristic(context, returnHandler: returnHandler);
   }
 
 
-  Future<bool> connectBLEdevice(BuildContext context, {Function returnHandler}) async {
-    FlutterBlue.instance.stopScan();
-    targetDevice = await Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => getBLEdevices()
-                            )
-                          );
-    return discoverServices(context, returnHandler: returnHandler);
-  }
+  static void getCharacteristic(BuildContext context, BluetoothDevice device, {Function returnHandler}) async {
+    targetDevice = device;
+    if (targetDevice == null) return;
+    
+    showAlert(context, "First");
+    await targetDevice.connect();
+    await targetDevice.discoverServices().catchError((e) => showAlert(context, e.toString()));
+    showAlert(context, "second");
 
-
-  Future<bool> discoverServices(BuildContext context, {Function returnHandler}) async{
-    if (targetDevice == null) return false;
     List<BluetoothService> serviceList;
     Future<List<BluetoothService>> connect() async{
       await targetDevice.connect();
-      serviceList = await targetDevice.discoverServices();
+      serviceList = await targetDevice.discoverServices().catchError((e) => showAlert(context, e.toString()));
+      showAlert(context, serviceList.toString());
       serviceList.forEach((service) {
+        showAlert(context, service.uuid.toString());
         if (service.uuid.toString().split("-")[0] == SERVICE_UUID_PREFIX) {
           targetService = service;
           service.characteristics.forEach((characteristic) async {
+            showAlert(context, characteristic.uuid.toString());
             if (characteristic.uuid.toString().split("-")[0] == CHARACTERISTIC_UUID_PREFIX) {
               targetCharacteristic = characteristic;
               await configureCharacteristics(context, returnHandler: returnHandler);
@@ -91,9 +131,10 @@ class BLEconnect {
           content: FutureBuilder<List<BluetoothService>>(
             future: connect(),
             builder: (context, snapshot) {
-                            if (snapshot.hasData) {
-                              Navigator.of(context).pop();
-                              return CircularProgressIndicator();           
+              if (snapshot.hasData) {
+                showAlert(context, snapshot.data.toString());
+                Navigator.of(context).pop();
+                return CircularProgressIndicator();                         
               }
               return CircularProgressIndicator();
             },
@@ -101,14 +142,18 @@ class BLEconnect {
         );
       },
     );
-
-    return true;
   }
 
 
-  Future<bool> configureCharacteristics(BuildContext context, {Function returnHandler}) async {
-    dataToSendController = StreamController<List<int>>();
+  static Future<bool> configureCharacteristics(BuildContext context, {Function returnHandler}) async {
     await targetCharacteristic.setNotifyValue(true);
+    dataToSendController = StreamController<List<int>>();
+    Stream dataToSendStream = dataToSendController.stream;
+    sendSubscription = dataToSendStream.listen((sendData) async {
+      sendSubscription.pause();
+      await targetCharacteristic.write(sendData).catchError((e) => showAlert(context, e.toString()));      
+      sendSubscription.resume();
+    });
     readSubscription = targetCharacteristic.value.listen((value) {
       // showAlert(context, "Data received:\n${value.toString()}");
       if (value.length>=2) {
@@ -117,17 +162,12 @@ class BLEconnect {
         }
       }
     });
-    Stream dataToSendStream = dataToSendController.stream;
-    sendSubscription = dataToSendStream.listen((sendData) async {
-      sendSubscription.pause();
-      await targetCharacteristic.write(sendData).catchError((e) => showAlert(context, e.toString()));
-      sendSubscription.resume();
-    });
     return true;
   }
 
 
-  static Future<bool> dispatchCharacteristics(BuildContext context) async {
+  static Future<bool> disconnectBLEdevice(BuildContext context) async {
+    await targetDevice.disconnect();
     targetDevice = null;
     targetService = null;
     targetCharacteristic = null;
@@ -202,6 +242,10 @@ class BluetoothOffScreen extends StatelessWidget {
 
 
 class FindDevicesScreen extends StatelessWidget {
+  const FindDevicesScreen({Key key, this.onConnect, this.returnHandler}) : super(key: key);
+
+  final Function onConnect;
+  final Function returnHandler;
 
   Widget scanResultTile(BuildContext context, ScanResult result, Function onTap) {
     Text subtitle;
@@ -252,8 +296,7 @@ class FindDevicesScreen extends StatelessWidget {
                         color: Colors.black,
                         textColor: Colors.white,
                         onPressed: () {
-                          BLEconnect.dispatchCharacteristics(context);
-                          d.disconnect();
+                          BLEconnect.disconnectBLEdevice(context);
                         }
                       ),
                     )
@@ -269,7 +312,13 @@ class FindDevicesScreen extends StatelessWidget {
                   .map((result) => scanResultTile(
                       context, 
                       result,
-                      () => Navigator.of(context).pop(result.device),
+                      // () => Navigator.of(context).pop(result.device),
+                      () => BLEconnect.getCharacteristic(
+                                        context,
+                                        result.device,
+                                        returnHandler: returnHandler,
+                                        // onConnect: onConnect,
+                                      )
                     ),
                   ).toList(),
                 );
