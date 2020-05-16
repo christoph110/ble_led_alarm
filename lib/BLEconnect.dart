@@ -1,15 +1,20 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_blue/flutter_blue.dart';
+import 'dart:async';
 
 
 class BLEconnect {
 
   static const String SERVICE_UUID_PREFIX = "0000ffe0";
   static const String CHARACTERISTIC_UUID_PREFIX = "0000ffe1";
-  BluetoothDevice targetDevice;
-  BluetoothService targetService;
-  BluetoothCharacteristic targetCharacteristic;
+  static BluetoothDevice targetDevice;
+  static BluetoothService targetService;
+  static BluetoothCharacteristic targetCharacteristic;
+
+  static StreamController<List<int>> dataToSendController;
+  static StreamSubscription sendSubscription;
+  static StreamSubscription readSubscription;
 
   
   Widget withBLEon(BuildContext context, Function func) {
@@ -48,14 +53,18 @@ class BLEconnect {
   }
 
 
-  Future<bool> connectBLEdevice(BuildContext context, BluetoothDevice device) async {
+  Future<bool> connectBLEdevice(BuildContext context, {Function returnHandler}) async {
     FlutterBlue.instance.stopScan();
-    targetDevice = device;
-    return discoverServices(context);
+    targetDevice = await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => getBLEdevices()
+                            )
+                          );
+    return discoverServices(context, returnHandler: returnHandler);
   }
 
 
-  Future<bool> discoverServices(BuildContext context) async{
+  Future<bool> discoverServices(BuildContext context, {Function returnHandler}) async{
     if (targetDevice == null) return false;
     List<BluetoothService> serviceList;
     Future<List<BluetoothService>> connect() async{
@@ -67,6 +76,7 @@ class BLEconnect {
           service.characteristics.forEach((characteristic) async {
             if (characteristic.uuid.toString().split("-")[0] == CHARACTERISTIC_UUID_PREFIX) {
               targetCharacteristic = characteristic;
+              await configureCharacteristics(context, returnHandler: returnHandler);
             }
           });
         }
@@ -95,25 +105,48 @@ class BLEconnect {
     return true;
   }
 
-  
-  void sendData(BuildContext context, List<int>  data, Function func) async {
-    if (targetCharacteristic == null) return;
-    var subscription;
-    subscription = targetCharacteristic.value.listen((value) {
+
+  Future<bool> configureCharacteristics(BuildContext context, {Function returnHandler}) async {
+    dataToSendController = StreamController<List<int>>();
+    await targetCharacteristic.setNotifyValue(true);
+    readSubscription = targetCharacteristic.value.listen((value) {
+      // showAlert(context, "Data received:\n${value.toString()}");
       if (value.length>=2) {
         if (value[value.length-2] == 13 && value[value.length-1] == 10) {
-          func(value.sublist(0, value.length-2));
-          targetCharacteristic.setNotifyValue(false);
-          subscription.cancel();
+          returnHandler(value.sublist(0, value.length-2));
         }
       }
     });
-    await targetCharacteristic.setNotifyValue(true);
-    await targetCharacteristic.write(data).catchError((e) => showAlert(context, e.toString()));
+    Stream dataToSendStream = dataToSendController.stream;
+    sendSubscription = dataToSendStream.listen((sendData) async {
+      sendSubscription.pause();
+      await targetCharacteristic.write(sendData).catchError((e) => showAlert(context, e.toString()));
+      sendSubscription.resume();
+    });
+    return true;
   }
 
 
-  void showAlert(BuildContext context, String message) {
+  static Future<bool> dispatchCharacteristics(BuildContext context) async {
+    targetDevice = null;
+    targetService = null;
+    targetCharacteristic = null;
+    readSubscription.cancel();
+    sendSubscription.cancel();
+    dataToSendController.close();
+    // showAlert(context, "dispatched");
+    return true;
+  }
+
+  
+  void sendData(BuildContext context, List<int>  data, {bool fastSend: false}) async {
+    if (targetCharacteristic == null) return;
+    if (fastSend && sendSubscription.isPaused) return;
+    dataToSendController.add(data);
+  }
+
+
+  static void showAlert(BuildContext context, String message) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -219,6 +252,7 @@ class FindDevicesScreen extends StatelessWidget {
                         color: Colors.black,
                         textColor: Colors.white,
                         onPressed: () {
+                          BLEconnect.dispatchCharacteristics(context);
                           d.disconnect();
                         }
                       ),

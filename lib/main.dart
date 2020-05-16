@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'color_picker.dart';
-// import 'BLEconnect.dart';
-import 'BLEconnectEmulator.dart';  // use this package instead when debugging with emulated device where BLE functionality is not available
+import 'BLEconnect.dart';
+// import 'BLEconnectEmulator.dart';  // use this package instead when debugging with emulated device where BLE functionality is not available
 
 
 void main() => runApp(MyApp());
@@ -39,12 +39,26 @@ class _MyHomePageState extends State<MyHomePage> {
 
   var alarmList = new List();
   BLEconnect bleConnect = new BLEconnect();
-  Color currentColor = Color(0xffff0000);
+  HSVColor currentColor = HSVColor.fromAHSV(1, 0, 1, 1);
+  
+  // these following command indices have in accordance with the BLE device
+  var sendCommands = {
+    "set_BLE_DateTime":      0,
+    "set_BLE_Color":         1,
+    "get_BLE_Color":         2,
+    "get_BLE_Alarms":        3,
+    "set_BLE_Alarms":        4,   
+  };
+  var receiveCommands = {
+      "set_Android_Color":   0,
+      "set_Android_Alarms":  1,   
+  };
 
-  void syncBLEdevice() {
+
+  void syncDateTimeWithBLEdevice() {
     var currDt = DateTime.now();
     List<int> sendBytes = [
-      0,
+      sendCommands["set_BLE_DateTime"],
       currDt.year % 100,
       currDt.month,
       currDt.day,
@@ -52,20 +66,48 @@ class _MyHomePageState extends State<MyHomePage> {
       currDt.minute,
       currDt.second,
     ];
-    // showAlert(context, "synctime: ${sendBytes.toString()}");
-    bleConnect.sendData(context, sendBytes, (returnValue) {
-      // showAlert(context, returnValue.toString());
-      setAlarmList(returnValue);
-    });
+    bleConnect.sendData(context, sendBytes);
   }
-  
-  
+
+
+  void directLightChangeEvent(HSVColor returnColor) {
+    setState(() {
+      currentColor = returnColor;
+    });
+    List<int> sendBytes = [
+      sendCommands["set_BLE_Color"],
+      currentColor.hue ~/ 2,                      // HSV hue downscaled to 0-180 units to fit in 1 byte
+      (255 * currentColor.saturation).toInt(),    // HSV saturation 0-255 
+      (255 * currentColor.value).toInt(),         // HSV value 0-255
+    ];
+    bleConnect.sendData(context, sendBytes, fastSend: true);
+  }
+
+
+  void getCurrentColor() {
+    List<int> sendBytes = [
+      sendCommands["get_BLE_Color"]
+    ];
+    bleConnect.sendData(context, sendBytes);
+  }
+
+
+  void getAlarmList() {
+    List<int> sendBytes = [
+      sendCommands["get_BLE_Alarms"]
+    ];
+    bleConnect.sendData(context, sendBytes);
+  }
+
+
   void alarmListChangeEvent(VoidCallback fn) {
     setState(() {
         fn();
     });
-    List<int> sendBytes = [1] + alarmsToData();
-    bleConnect.sendData(context, sendBytes, (returnValue) => null);
+    List<int> alarmData =  alarmsToData();
+    List<int> sendBytes = [sendCommands["set_BLE_Alarms"], alarmData.length] + alarmData;
+    // showAlert(context, sendBytes.toString());
+    bleConnect.sendData(context, sendBytes);
   }
 
 
@@ -79,21 +121,41 @@ class _MyHomePageState extends State<MyHomePage> {
       });
       alarmData = (alarmData << 5) + int.parse((alarm["alarmTime"].split(":"))[0]); // add alarm hour
       alarmData = (alarmData << 6) + int.parse((alarm["alarmTime"].split(":"))[1]); // add alarm min
-      alarmData = (alarmData << 4) + 0;   // 4 bits remaining for additional information
+      alarmData = (alarmData << 4) + 0;   //   4 bits remaining for additional information
+
       // splitting the data into 3 bytes and saving to list
       output.add((alarmData >> 16) & 255);                                      
       output.add((alarmData >> 8) & 255);                                      
       output.add(alarmData & 255);                                      
     });
-    // showAlert(context, output.toString());
+
     return output;
   }
 
 
-void setAlarmList(List<int> returnValue) {
+  void returnHandler(List<int> returnValue) {
+    // showAlert(context, "Data received:\n${returnValue.toString()}");
+    if      (returnValue[0] == receiveCommands["set_Android_Color"])    setCurrentColor(returnValue);
+    else if (returnValue[0] == receiveCommands["set_Android_Alarms"])   setAlarmList(returnValue);
+  }
+
+
+  void setCurrentColor(List<int> returnValue) {
+    setState(() {
+      currentColor = HSVColor.fromAHSV(
+        1,                                  // alpha set to 1
+        returnValue[1].toDouble() * 2,      // hue on BLE is scaled down from 0-360 to 0-180 to fit in 1 byte
+        returnValue[2].toDouble() / 255,    // saturation on BLE is scaled to 0-255
+        returnValue[3].toDouble() / 255,    // value on BLE is scaled to 0-255
+      );
+    });
+    // showAlert(context, "color received");
+  }
+
+  
+  void setAlarmList(List<int> returnValue) {
     alarmList = [];
-    for (int idx = 0; idx < returnValue.length - 2; idx = idx + 3)    // reads alarmData in chunks of 3 bytes
-    {
+    for (int idx = 1; idx < returnValue.length; idx = idx + 3) {
       int alarmData = (returnValue[idx] << 16) + (returnValue[idx + 1] << 8) + returnValue[idx + 2];
       var alarmInfo = {
         "alarmTime":  ((alarmData >> 10) & 31).toString().padLeft(2,'0') + ":" + ((alarmData >> 4) & 63).toString().padLeft(2,'0'),
@@ -115,23 +177,20 @@ void setAlarmList(List<int> returnValue) {
   }
 
 
-  void addDefaultAlarm({List<int> init = const []}) {
-    var alarmInfo = {
-      "alarmTime": "01:00",
-      "alarmState": true,
-      "repeatState": false,
-      "weekdays": {
-        "Mon": true,
-        "Tue": true,
-        "Wed": true,
-        "Thu": true,
-        "Fri": true,
-        "Sat": true,
-        "Sun": true,
-      },
-      "mode": 0,  // 4 bits remaining for additional information
-    };
-    setState(() => alarmList.add(alarmInfo));
+  Row getWeekDayRow(int index) {
+    Row weekDayRow = Row(
+      children: [
+        Spacer(),
+        for (var weekDayEntry in alarmList[index]["weekdays"].entries) 
+            buildWeekDayButton(
+              index,
+              weekDayEntry.key.toString(),
+              weekDayEntry.value
+            ),
+        Spacer(),
+      ],
+    );
+    return weekDayRow;
   }
 
 
@@ -169,25 +228,7 @@ void setAlarmList(List<int> returnValue) {
   }
 
 
-  Row getWeekDayRow(int index) {
-    Row weekDayRow = Row(
-      children: [
-        Spacer(),
-        for (var weekDayEntry in alarmList[index]["weekdays"].entries) 
-            buildWeekDayButton(
-              index,
-              weekDayEntry.key.toString(),
-              weekDayEntry.value
-            ),
-        Spacer(),
-      ],
-    );
-    return weekDayRow;
-  }
-
-
   Column buildAlarm(int index) {
-
     Column alarmElem = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -280,6 +321,26 @@ void setAlarmList(List<int> returnValue) {
     }
   }
 
+
+  void addDefaultAlarm({List<int> init = const []}) {
+    var alarmInfo = {
+      "alarmTime": "01:00",
+      "alarmState": true,
+      "repeatState": false,
+      "weekdays": {
+        "Mon": true,
+        "Tue": true,
+        "Wed": true,
+        "Thu": true,
+        "Fri": true,
+        "Sat": true,
+        "Sun": true,
+      },
+      "mode": 0,  // 4 bits remaining for additional information
+    };
+    setState(() => alarmList.add(alarmInfo));
+  }
+
  
   void confirmAlarmDelete(int index) {
     showDialog(
@@ -342,12 +403,16 @@ void setAlarmList(List<int> returnValue) {
                       onPressed: () async {
                         bleConnect.connectBLEdevice(
                           context, 
-                          await Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => bleConnect.getBLEdevices())))
-                              .then((isConnected) {
-                                if (isConnected) syncBLEdevice();
-                              });
+                          returnHandler: (returnValue) => returnHandler(returnValue) 
+                        )
+                        .then((isConnected) {
+                          if (isConnected) {
+                            syncDateTimeWithBLEdevice();
+                            getCurrentColor();
+                            getAlarmList();
+                          }
+                        });
+                          
                       },
                     )
                   )
@@ -357,6 +422,7 @@ void setAlarmList(List<int> returnValue) {
           )  
         ),
         body: TabBarView(
+          physics: NeverScrollableScrollPhysics(),
           children: <Widget>[
             alarmListScreen(context),
             directLight(context),
@@ -399,56 +465,10 @@ void setAlarmList(List<int> returnValue) {
 
 
   Widget directLight(BuildContext context) {
-    return Scaffold(
-      body:  Align(
-        alignment: Alignment.topCenter,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: <Widget>[
-            SizedBox(height: 20),
-            CircleColorPicker(
-              thumbRadius: 10,
-              colorListener: (int value) {
-                setState(() {
-                  currentColor = Color(value);
-                });
-              },
-            ),
-            SizedBox(height: 20),
-            BarColorPicker(
-              width: 300,
-              thumbColor: Colors.white,
-              cornerRadius: 10,
-              pickMode: PickMode.Color,
-              colorListener: (int value) {
-                setState(() {
-                  currentColor = Color(value);
-                });
-              }),
-            SizedBox(height: 20),
-            BarColorPicker(
-              cornerRadius: 10,
-              pickMode: PickMode.Grey,
-              colorListener: (int value) {
-                setState(() {
-                  currentColor = Color(value);
-                });
-              }),
-            SizedBox(height: 20),
-            Container(
-              width: 150,
-              height: 50,
-              color: currentColor,
-              alignment: Alignment.center,
-              child: Text(currentColor.value.toRadixString(16).toUpperCase()),
-            ),
-          ],
-        ),
-      ),
-      // body:  FlatButton(
-      //   child: new Text("Get time of BLE device"),
-      //   onPressed: () => bleConnect.sendData(context, [9], (returnValue) => showAlert(context, returnValue.toString())),
-      // ),
+    return ColorPicker(
+      barCornerRadius: 10,
+      initialColor: currentColor,
+      colorListener: (HSVColor returnColor) => directLightChangeEvent(returnColor),
     );
   }
 

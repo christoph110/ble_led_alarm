@@ -53,17 +53,20 @@ class BLEconnect {
     return FindDevicesScreen();
   }
 
-  Future<bool>  connectBLEdevice(BuildContext context, var device) async {
+   Future<bool> connectBLEdevice(BuildContext context, {Function returnHandler}) async {
     return true;
-  // void connectBLEdevice(BuildContext context, BluetoothDevice device) {
-  //   FlutterBlue.instance.stopScan();
-  //   targetDevice = device;
-  //   discoverServices(context);
+    // FlutterBlue.instance.stopScan();
+    // targetDevice = await Navigator.of(context).push(
+    //                         MaterialPageRoute(
+    //                           builder: (context) => getBLEdevices()
+    //                         )
+    //                       );
+    // return discoverServices(context, returnHandler: returnHandler);
   }
 
 
-  // void discoverServices(BuildContext context) async{
-  //   if (targetDevice == null) return;
+  // Future<bool> discoverServices(BuildContext context, {Function returnHandler}) async{
+  //   if (targetDevice == null) return false;
   //   List<BluetoothService> serviceList;
   //   Future<List<BluetoothService>> connect() async{
   //     await targetDevice.connect();
@@ -74,6 +77,7 @@ class BLEconnect {
   //         service.characteristics.forEach((characteristic) async {
   //           if (characteristic.uuid.toString().split("-")[0] == CHARACTERISTIC_UUID_PREFIX) {
   //             targetCharacteristic = characteristic;
+  //             await configureCharacteristics(context, returnHandler: returnHandler);
   //           }
   //         });
   //       }
@@ -98,24 +102,36 @@ class BLEconnect {
   //       );
   //     },
   //   );
+
+  //   return true;
   // }
 
 
-  void sendData(BuildContext context, List<int> data, Function func) async {
-    List<int> dummyReturnValue = [0,0,0,0];
-    func(dummyReturnValue);
+  // Future<bool> configureCharacteristics(BuildContext context, {Function returnHandler}) async {
+  //   dataToSendController = StreamController<List<int>>();
+  //   await targetCharacteristic.setNotifyValue(true);
+  //   readSubscription = targetCharacteristic.value.listen((value) {
+  //     // showAlert(context, "Data received:\n${value.toString()}");
+  //     if (value.length>=2) {
+  //       if (value[value.length-2] == 13 && value[value.length-1] == 10) {
+  //         returnHandler(value.sublist(0, value.length-2));
+  //       }
+  //     }
+  //   });
+  //   Stream dataToSendStream = dataToSendController.stream;
+  //   sendSubscription = dataToSendStream.listen((sendData) async {
+  //     sendSubscription.pause();
+  //     await targetCharacteristic.write(sendData).catchError((e) => showAlert(context, e.toString()));
+  //     sendSubscription.resume();
+  //   });
+  //   return true;
+  // }
+
+
+  void sendData(BuildContext context, List<int>  data, {bool fastSend: false}) async {
     // if (targetCharacteristic == null) return;
-    // targetCharacteristic.value.listen((value) {
-    //   if (value.length>=2) {
-    //     if (value[value.length-2] == 13 && value[value.length-1] == 10) {
-    //       func(value.sublist(0, value.length-2));
-    //       targetCharacteristic.setNotifyValue(false);
-    //     }
-    //   }
-    // });
-    // await targetCharacteristic.setNotifyValue(true);
-    // List<int> bytes = utf8.encode(data);
-    // await targetCharacteristic.write(bytes).catchError((e) => showAlert(context, e.toString()));
+    // if (fastSend && sendSubscription.isPaused) return;
+    // dataToSendController.add(data);
   }
 
 
