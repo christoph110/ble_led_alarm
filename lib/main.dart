@@ -38,7 +38,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
 
   var alarmList = new List();
-  BLEconnect bleConnect = new BLEconnect();
+  BLEconnect bleObject = new BLEconnect();
   HSVColor currentColor = HSVColor.fromAHSV(1, 0, 1, 1);
   
   // these following command indices have in accordance with the BLE device
@@ -66,7 +66,7 @@ class _MyHomePageState extends State<MyHomePage> {
       currDt.minute,
       currDt.second,
     ];
-    bleConnect.sendData(context, sendBytes);
+    bleObject.sendData(context, sendBytes);
   }
 
 
@@ -80,7 +80,7 @@ class _MyHomePageState extends State<MyHomePage> {
       (255 * currentColor.saturation).toInt(),    // HSV saturation 0-255 
       (255 * currentColor.value).toInt(),         // HSV value 0-255
     ];
-    bleConnect.sendData(context, sendBytes, fastSend: true);
+    bleObject.sendData(context, sendBytes, fastSend: true);
   }
 
 
@@ -88,7 +88,7 @@ class _MyHomePageState extends State<MyHomePage> {
     List<int> sendBytes = [
       sendCommands["get_BLE_Color"]
     ];
-    bleConnect.sendData(context, sendBytes);
+    bleObject.sendData(context, sendBytes);
   }
 
 
@@ -96,7 +96,7 @@ class _MyHomePageState extends State<MyHomePage> {
     List<int> sendBytes = [
       sendCommands["get_BLE_Alarms"]
     ];
-    bleConnect.sendData(context, sendBytes);
+    bleObject.sendData(context, sendBytes);
   }
 
 
@@ -107,7 +107,7 @@ class _MyHomePageState extends State<MyHomePage> {
     List<int> alarmData =  alarmsToData();
     List<int> sendBytes = [sendCommands["set_BLE_Alarms"], alarmData.length] + alarmData;
     // showAlert(context, sendBytes.toString());
-    bleConnect.sendData(context, sendBytes);
+    bleObject.sendData(context, sendBytes);
   }
 
 
@@ -400,10 +400,10 @@ class _MyHomePageState extends State<MyHomePage> {
                     width: 70,
                     child: FlatButton(
                       child: Text("Disconnect"),
-                      onPressed: () => BLEconnect.disconnectBLEdevice(context),
-                      // child: bleConnect.bleDeviceState(context),
+                      onPressed: () => bleObject.disconnectBLEdevice(context),
+                      // child: bleObject.bleDeviceState(context),
                       // onPressed: () async {
-                      //   bleConnect.connectBLEdevice(
+                      //   bleObject.connectBLEdevice(
                       //     context, 
                       //     returnHandler: (returnValue) => returnHandler(returnValue) 
                       //   )
@@ -496,7 +496,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return bleConnect.withBLEconnected(
+    return bleObject.withBLEconnected(
       context,
       onConnect: () {
         syncDateTimeWithBLEdevice();
