@@ -116,7 +116,6 @@ class BLEconnect {
     Future<List<BluetoothService>> connect() async{
       await targetDevice.connect();
       List<BluetoothService> serviceList = await targetDevice.discoverServices();
-      return serviceList;
       serviceList.forEach((service) {
         if (service.uuid.toString().split("-")[0] == SERVICE_UUID_PREFIX) {
           targetService = service;
@@ -131,6 +130,7 @@ class BLEconnect {
           });
         }
       });
+      return serviceList;
     }
     await showDialog(
       context: context,
