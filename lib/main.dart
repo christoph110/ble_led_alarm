@@ -51,7 +51,8 @@ class _MyHomePageState extends State<MyHomePage> {
   };
   var receiveCommands = {
       "set_Android_Color":   0,
-      "set_Android_Alarms":  1,   
+      "set_Android_Alarms":  1,
+      "status_feedback":     9,   
   };
 
 
@@ -66,6 +67,7 @@ class _MyHomePageState extends State<MyHomePage> {
       currDt.minute,
       currDt.second,
     ];
+    // showAlert(context, "Sync");
     bleObject.sendData(context, sendBytes);
   }
 
@@ -88,6 +90,7 @@ class _MyHomePageState extends State<MyHomePage> {
     List<int> sendBytes = [
       sendCommands["get_BLE_Color"]
     ];
+    // showAlert(context, "getColor");
     bleObject.sendData(context, sendBytes);
   }
 
@@ -96,6 +99,7 @@ class _MyHomePageState extends State<MyHomePage> {
     List<int> sendBytes = [
       sendCommands["get_BLE_Alarms"]
     ];
+    // showAlert(context, "getAlerts");
     bleObject.sendData(context, sendBytes);
   }
 
@@ -174,6 +178,7 @@ class _MyHomePageState extends State<MyHomePage> {
       };
       setState(() => alarmList.add(alarmInfo));
     }
+    // showAlert(context, "Alarms received");
   }
 
 
@@ -268,7 +273,6 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
               ),
             ),
-            // Spacer(),
             IconButton(
               icon: Icon(Icons.delete),
               color: Colors.lightBlue,
@@ -276,15 +280,7 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ],
         ),
-        
         if(alarmList[index]["repeatState"]) getWeekDayRow(index),
-
-        // For Debug purposes only:
-        // Text(
-        //   alarmList[index].toString(),
-        //   textAlign: TextAlign.left,
-        // ),
-
       ],
     );
     return alarmElem;
@@ -397,24 +393,13 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                   Spacer(),
                   SizedBox(
-                    width: 70,
+                    width: 200,
                     child: FlatButton(
-                      child: Text("Disconnect"),
+                      child: Row(children: <Widget>[
+                        bleObject.bleDeviceState(context),
+                        Text("Change device"),
+                      ],),
                       onPressed: () => bleObject.disconnectBLEdevice(context),
-                      // child: bleObject.bleDeviceState(context),
-                      // onPressed: () async {
-                      //   bleObject.connectBLEdevice(
-                      //     context, 
-                      //     returnHandler: (returnValue) => returnHandler(returnValue) 
-                      //   )
-                      //   .then((isConnected) {
-                      //     if (isConnected) {
-                      //       syncDateTimeWithBLEdevice();
-                      //       getCurrentColor();
-                      //       getAlarmList();
-                      //     }
-                      //   });
-                      // },
                     )
                   )
                 ],
@@ -422,13 +407,32 @@ class _MyHomePageState extends State<MyHomePage> {
             )
           )  
         ),
-        body: TabBarView(
-          physics: NeverScrollableScrollPhysics(),
+        body: Stack(
           children: <Widget>[
-            alarmListScreen(context),
-            directLight(context),
+            TabBarView(
+              physics: NeverScrollableScrollPhysics(),
+              children: <Widget>[
+                alarmListScreen(context),
+                directLight(context),
+              ]
+            ),
+            bleObject.withBLEdeviceConnected(
+              context,
+              whileDisconnected: Positioned.fill(
+                child: Container(
+                  color: Colors.black.withAlpha(64),
+                  child: Text("Device not connected.",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      ),
+                  ),
+                  alignment: Alignment.center,
+                ),
+              )
+            ),
           ]
-        )
+        ),
       )
     );
   }

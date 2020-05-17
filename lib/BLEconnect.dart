@@ -16,7 +16,6 @@ class BLEconnect {
   static StreamSubscription sendSubscription;
   static StreamSubscription readSubscription;
 
-  // static StreamController<bool> isConnectedStream;
   final StreamController<bool> isConnectedCtrl = StreamController<bool>.broadcast();
   Stream get isConnectedStream => isConnectedCtrl.stream;
   
@@ -27,20 +26,17 @@ class BLEconnect {
       builder: (c, snapshot) {
         final state = snapshot.data;
         if (state == BluetoothState.on) {
-          // return whileConnected();
           return StreamBuilder<bool>(
             stream: isConnectedStream,
-            // stream: Stream.periodic(Duration(seconds: 2)).asyncMap((_) => getIsConnected),
             initialData: false,
             builder: (BuildContext c, AsyncSnapshot<bool> snapshot) {
-              // showAlert(context, snapshot.data.toString());
               final state = snapshot.data;
               if (state) {
                 return whileConnected();
               }
               return connectBLEdevice(
                       context, 
-                      onConnect: onConnect(),
+                      onConnect: onConnect,
                       returnHandler: (returnValue) => returnHandler(returnValue) 
               );
             }
@@ -52,19 +48,36 @@ class BLEconnect {
   }
 
 
-  // Widget bleDeviceState(BuildContext context) {
-  //   return StreamBuilder<List<BluetoothDevice>>(
-  //     stream: Stream.periodic(Duration(seconds: 1))
-  //         .asyncMap((_) => FlutterBlue.instance.connectedDevices),
-  //     initialData: [],
-  //     builder: (c, snapshot) {
-  //       if (snapshot.data.contains(targetDevice)) {
-  //         return Icon(Icons.bluetooth_connected);
-  //       }
-  //       return Icon(Icons.bluetooth_disabled, color: Colors.red);
-  //     } 
-  //   );
-  // }
+  Widget bleDeviceState(BuildContext context) {
+    return StreamBuilder<BluetoothDeviceState>(
+      // stream: Stream.periodic(Duration(milliseconds: 500))
+      //     .asyncMap((_) => FlutterBlue.instance.connectedDevices),
+      // initialData: [],
+      stream: targetDevice.state,
+      initialData: BluetoothDeviceState.disconnected,
+      builder: (c, snapshot) {
+        // if (snapshot.data.contains(targetDevice)) {
+        if (snapshot.data == BluetoothDeviceState.connected) {
+          return Icon(Icons.bluetooth_connected);
+        }
+        return Icon(Icons.bluetooth_disabled, color: Colors.red);
+      } 
+    );
+  }
+
+
+  Widget withBLEdeviceConnected(BuildContext context, {Widget whileDisconnected}) {
+    return StreamBuilder<BluetoothDeviceState>(
+      stream: targetDevice.state,
+      initialData: BluetoothDeviceState.disconnected,
+      builder: (c, snapshot) {
+        if (snapshot.data == BluetoothDeviceState.disconnected) {
+          return whileDisconnected;
+        }
+        return null;
+      } 
+    );
+  }
 
 
   // bool isConnected(BuildContext context) {
@@ -101,49 +114,45 @@ class BLEconnect {
     // return getCharacteristic(context, returnHandler: returnHandler);
   }
 
+
   /// discovers the services of the BLE device and starts configuration of the characteristics
   void getCharacteristic(BuildContext context, {Function onConnect, Function returnHandler}) async {
     if (targetDevice == null) return;
-    
-    List<BluetoothService> serviceList;
-    // showAlert(context, "First");
-    // await targetDevice.connect();
-    // showAlert(context, "Second");
-    // serviceList = await targetDevice.discoverServices();
-    // showAlert(context, "Third");
-
-    
-    Future<List<BluetoothService>> connect() async{
+    bool connected;
+    Future<bool> connect() async{
       await targetDevice.connect();
-      List<BluetoothService> serviceList = await targetDevice.discoverServices();
+      // connected = true;
+      List<BluetoothService> serviceList = await targetDevice.discoverServices().catchError((e) => showAlert(context, e.toString()));
       serviceList.forEach((service) {
         if (service.uuid.toString().split("-")[0] == SERVICE_UUID_PREFIX) {
           targetService = service;
-          service.characteristics.forEach((characteristic) async {
-            showAlert(context, characteristic.uuid.toString());
+          service.characteristics.forEach((characteristic) {
             if (characteristic.uuid.toString().split("-")[0] == CHARACTERISTIC_UUID_PREFIX) {
               targetCharacteristic = characteristic;
-              bool isConnected =  await configureCharacteristics(context, returnHandler: returnHandler)
-                .then((isConnected) => onConnect());
-              return isConnected;
             }
           });
         }
       });
-      return serviceList;
+      if (targetCharacteristic != null) {
+        connected = await configureCharacteristics(context, returnHandler: returnHandler);
+        onConnect();
+        return connected;
+      } else {
+        return false;
+      }
+      
     }
     await showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: new Text("Connecting"),
-          content: FutureBuilder<List<BluetoothService>>(
+          content: FutureBuilder<bool>(
             future: connect(),
             builder: (context, snapshot) {
-              showAlert(context, snapshot.hasData.toString());
               if (snapshot.hasData) {
-                
                 Navigator.of(context).pop();
+                isConnectedCtrl.sink.add(true);
                 return CircularProgressIndicator();                         
               }
               return CircularProgressIndicator();
@@ -156,7 +165,7 @@ class BLEconnect {
 
 
   Future<bool> configureCharacteristics(BuildContext context, {Function returnHandler}) async {
-    await targetCharacteristic.setNotifyValue(true);
+    await targetCharacteristic.setNotifyValue(true).catchError((e) => showAlert(context, e.toString()));
     dataToSendController = StreamController<List<int>>();
     Stream dataToSendStream = dataToSendController.stream;
     sendSubscription = dataToSendStream.listen((sendData) async {
@@ -165,7 +174,6 @@ class BLEconnect {
       sendSubscription.resume();
     });
     readSubscription = targetCharacteristic.value.listen((value) {
-      // showAlert(context, "Data received:\n${value.toString()}");
       if (value.length>=2) {
         if (value[value.length-2] == 13 && value[value.length-1] == 10) {
           returnHandler(value.sublist(0, value.length-2));
@@ -173,6 +181,13 @@ class BLEconnect {
       }
     });
     return true;
+  }
+
+
+  void sendData(BuildContext context, List<int>  data, {bool fastSend: false}) async {
+    if (targetCharacteristic == null) return;
+    if (fastSend && sendSubscription.isPaused) return;
+    dataToSendController.add(data);
   }
 
 
@@ -185,14 +200,6 @@ class BLEconnect {
     sendSubscription.cancel();
     dataToSendController.close();
     isConnectedCtrl.sink.add(false);
-    // showAlert(context, "dispatched");
-  }
-
-  
-  void sendData(BuildContext context, List<int>  data, {bool fastSend: false}) async {
-    if (targetCharacteristic == null) return;
-    if (fastSend && sendSubscription.isPaused) return;
-    dataToSendController.add(data);
   }
 
 
