@@ -15,21 +15,34 @@ class BLEconnect {
   // BluetoothCharacteristic targetCharacteristic;
 
 
-  Widget withBLEon(BuildContext context, Function func) {
-    return func();
+Widget withBLEconnected(BuildContext context, {Function onConnect, Function whileConnected, Function returnHandler}) {
+    return whileConnected();
     // return StreamBuilder<BluetoothState>(
     //   stream: FlutterBlue.instance.state,
     //   initialData: BluetoothState.unknown,
     //   builder: (c, snapshot) {
     //     final state = snapshot.data;
     //     if (state == BluetoothState.on) {
-    //       return func();
+    //       return StreamBuilder<bool>(
+    //         stream: isConnectedStream,
+    //         initialData: false,
+    //         builder: (BuildContext c, AsyncSnapshot<bool> snapshot) {
+    //           final state = snapshot.data;
+    //           if (state) {
+    //             return whileConnected();
+    //           }
+    //           return connectBLEdevice(
+    //                   context, 
+    //                   onConnect: onConnect,
+    //                   returnHandler: (returnValue) => returnHandler(returnValue) 
+    //           );
+    //         }
+    //       );
     //     }
     //     return BluetoothOffScreen(state: state);
     //   }
     // );
   }
-
 
   Widget bleDeviceState(BuildContext context) {
     return Icon(Icons.bluetooth_disabled, color: Colors.red);
@@ -46,6 +59,20 @@ class BLEconnect {
     // );
   }
 
+
+  Widget withBLEdeviceConnected(BuildContext context, {Widget whileDisconnected}) {
+    return Text("");
+    // return StreamBuilder<BluetoothDeviceState>(
+    //   stream: targetDevice.state,
+    //   initialData: BluetoothDeviceState.disconnected,
+    //   builder: (c, snapshot) {
+    //     if (snapshot.data == BluetoothDeviceState.disconnected) {
+    //       return whileDisconnected;
+    //     }
+    //     return null;
+    //   } 
+    // );
+  }
 
 
   Widget getBLEdevices() {
@@ -134,6 +161,16 @@ class BLEconnect {
     // dataToSendController.add(data);
   }
 
+  void disconnectBLEdevice(BuildContext context) async {
+    // await targetDevice.disconnect();
+    // targetDevice = null;
+    // targetService = null;
+    // targetCharacteristic = null;
+    // readSubscription.cancel();
+    // sendSubscription.cancel();
+    // dataToSendController.close();
+    // isConnectedCtrl.sink.add(false);
+  }
 
   // void showAlert(BuildContext context, String message) {
   //   showDialog(

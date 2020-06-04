@@ -141,6 +141,7 @@ class _MyHomePageState extends State<MyHomePage> {
     // showAlert(context, "Data received:\n${returnValue.toString()}");
     if      (returnValue[0] == receiveCommands["set_Android_Color"])    setCurrentColor(returnValue);
     else if (returnValue[0] == receiveCommands["set_Android_Alarms"])   setAlarmList(returnValue);
+    else if (returnValue[0] == receiveCommands["status_feedback"])      showStatus(returnValue);
   }
 
 
@@ -179,6 +180,11 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() => alarmList.add(alarmInfo));
     }
     // showAlert(context, "Alarms received");
+  }
+
+
+  void showStatus(List<int> returnValue) {
+    if      (returnValue[1] == 1)    showAlert(context, "Error during data transmission.");
   }
 
 
@@ -508,7 +514,8 @@ class _MyHomePageState extends State<MyHomePage> {
         getAlarmList();
       },
       whileConnected: () => tabView(context),
-      returnHandler: (returnValue) => returnHandler(returnValue) 
+      returnHandler: (returnValue) => returnHandler(returnValue),
+      errorHandler: (e) => showAlert(context, e.toString())
       );
   }
 }

@@ -19,7 +19,7 @@ class BLEconnect {
   final StreamController<bool> isConnectedCtrl = StreamController<bool>.broadcast();
   Stream get isConnectedStream => isConnectedCtrl.stream;
   
-  Widget withBLEconnected(BuildContext context, {Function onConnect, Function whileConnected, Function returnHandler}) {
+  Widget withBLEconnected(BuildContext context, {Function onConnect, Function whileConnected, Function returnHandler, Function errorHandler}) {
     return StreamBuilder<BluetoothState>(
       stream: FlutterBlue.instance.state,
       initialData: BluetoothState.unknown,
@@ -37,7 +37,8 @@ class BLEconnect {
               return connectBLEdevice(
                       context, 
                       onConnect: onConnect,
-                      returnHandler: (returnValue) => returnHandler(returnValue) 
+                      returnHandler: (returnValue) => returnHandler(returnValue),
+                      errorHandler: errorHandler
               );
             }
           );
@@ -98,13 +99,14 @@ class BLEconnect {
   
 
 
-  Widget connectBLEdevice(BuildContext context, {Function onConnect, Function returnHandler}) {
+  Widget connectBLEdevice(BuildContext context, {Function onConnect, Function returnHandler, Function errorHandler}) {
     // FlutterBlue.instance.stopScan();
     FlutterBlue.instance.startScan();
     return findDevicesScreen(
             context,
             onConnect: onConnect,
-            returnHandler: returnHandler
+            returnHandler: returnHandler,
+            errorHandler: errorHandler
     );
     // targetDevice = await Navigator.of(context).push(
     //                         MaterialPageRoute(
@@ -116,13 +118,13 @@ class BLEconnect {
 
 
   /// discovers the services of the BLE device and starts configuration of the characteristics
-  void getCharacteristic(BuildContext context, {Function onConnect, Function returnHandler}) async {
+  void getCharacteristic(BuildContext context, {Function onConnect, Function returnHandler, Function errorHandler}) async {
     if (targetDevice == null) return;
     bool connected;
     Future<bool> connect() async{
       await targetDevice.connect();
       // connected = true;
-      List<BluetoothService> serviceList = await targetDevice.discoverServices().catchError((e) => showAlert(context, e.toString()));
+      List<BluetoothService> serviceList = await targetDevice.discoverServices().catchError((e) => errorHandler(e));
       serviceList.forEach((service) {
         if (service.uuid.toString().split("-")[0] == SERVICE_UUID_PREFIX) {
           targetService = service;
@@ -134,7 +136,7 @@ class BLEconnect {
         }
       });
       if (targetCharacteristic != null) {
-        connected = await configureCharacteristics(context, returnHandler: returnHandler);
+        connected = await configureCharacteristics(context, returnHandler: returnHandler, errorHandler: errorHandler);
         onConnect();
         return connected;
       } else {
@@ -164,13 +166,13 @@ class BLEconnect {
   }
 
 
-  Future<bool> configureCharacteristics(BuildContext context, {Function returnHandler}) async {
-    await targetCharacteristic.setNotifyValue(true).catchError((e) => showAlert(context, e.toString()));
+  Future<bool> configureCharacteristics(BuildContext context, {Function returnHandler, Function errorHandler}) async {
+    await targetCharacteristic.setNotifyValue(true).catchError((e) => errorHandler(e));
     dataToSendController = StreamController<List<int>>();
     Stream dataToSendStream = dataToSendController.stream;
     sendSubscription = dataToSendStream.listen((sendData) async {
       sendSubscription.pause();
-      await targetCharacteristic.write(sendData).catchError((e) => showAlert(context, e.toString()));      
+      await targetCharacteristic.write(sendData).catchError((e) => errorHandler(e));      
       sendSubscription.resume();
     });
     readSubscription = targetCharacteristic.value.listen((value) {
@@ -184,7 +186,7 @@ class BLEconnect {
   }
 
 
-  void sendData(BuildContext context, List<int>  data, {bool fastSend: false}) async {
+  void sendData(BuildContext context, List<int>  data, {bool fastSend: false, Function errorHandler}) async {
     if (targetCharacteristic == null) return;
     if (fastSend && sendSubscription.isPaused) return;
     dataToSendController.add(data);
@@ -203,24 +205,24 @@ class BLEconnect {
   }
 
 
-  void showAlert(BuildContext context, String message) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: new Text(message),
-          actions: <Widget>[
-            FlatButton(
-              child: new Text("OK"),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
+  // void showAlert(BuildContext context, String message) {
+  //   showDialog(
+  //     context: context,
+  //     builder: (BuildContext context) {
+  //       return AlertDialog(
+  //         title: new Text(message),
+  //         actions: <Widget>[
+  //           FlatButton(
+  //             child: new Text("OK"),
+  //             onPressed: () {
+  //               Navigator.of(context).pop();
+  //             },
+  //           ),
+  //         ],
+  //       );
+  //     },
+  //   );
+  // }
 
 
   Widget scanResultTile(BuildContext context, ScanResult result, Function onTap) {
@@ -249,7 +251,7 @@ class BLEconnect {
   }
 
 
-  Widget findDevicesScreen(BuildContext context, {Function onConnect, Function returnHandler}) {
+  Widget findDevicesScreen(BuildContext context, {Function onConnect, Function returnHandler, Function errorHandler}) {
     return Scaffold(
       appBar: AppBar(
         title: Text('Select Device'),
@@ -295,6 +297,7 @@ class BLEconnect {
                               context,
                               returnHandler: returnHandler,
                               onConnect: onConnect,
+                              errorHandler: errorHandler
                         );
                       }
                       
